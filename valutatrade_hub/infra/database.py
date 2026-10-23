@@ -8,15 +8,15 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 from .settings import SettingsLoader
 
 
 class DatabaseManager:
-    _instance: "DatabaseManager | None" = None
+    _instance: DatabaseManager | None = None
 
-    def __new__(cls, *args: Any, **kwargs: Any) -> "DatabaseManager":
+    def __new__(cls, *args: Any, **kwargs: Any) -> Self:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False  # type: ignore[attr-defined]

@@ -24,7 +24,7 @@ class Currency(ABC):
     @staticmethod
     def _validate_code(code: str) -> None:
         if not isinstance(code, str):
-            raise ValueError("Код валюты должен быть строкой")
+            raise TypeError("Код валюты должен быть строкой")
         if code != code.upper():
             raise ValueError("Код валюты должен быть в верхнем регистре")
         if not (2 <= len(code) <= 5) or not code.isalnum():
@@ -56,7 +56,7 @@ class CryptoCurrency(Currency):
         if not isinstance(algorithm, str) or not algorithm.strip():
             raise ValueError("Алгоритм не может быть пустым")
         if isinstance(market_cap, bool) or not isinstance(market_cap, (int, float)):
-            raise ValueError("market_cap должен быть числом")
+            raise TypeError("market_cap должен быть числом")
         if market_cap < 0:
             raise ValueError("market_cap не может быть отрицательным")
         self.algorithm: str = algorithm

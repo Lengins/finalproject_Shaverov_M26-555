@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from ..core.exceptions import ApiRequestError
 from .api_clients import BaseApiClient
@@ -12,7 +12,7 @@ logger = logging.getLogger("valutatrade.parser")
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 class RatesUpdater:

@@ -6,7 +6,11 @@ from ..decorators import log_action
 from ..infra.database import DatabaseManager
 from . import utils
 from .currencies import get_currency
-from .exceptions import InsufficientFundsError
+from .exceptions import (
+    ApiRequestError,
+    CurrencyNotFoundError,
+    InsufficientFundsError,
+)
 from .models import Portfolio, User
 
 _db = DatabaseManager()
@@ -101,7 +105,7 @@ def _usd_rate(currency: str) -> float | None:
     try:
         rate, _ = utils.get_rate(currency, "USD")
         return rate
-    except Exception:
+    except (ApiRequestError, CurrencyNotFoundError):   
         return None
 
 

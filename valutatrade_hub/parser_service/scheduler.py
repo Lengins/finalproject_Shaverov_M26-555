@@ -18,7 +18,7 @@ def start_scheduler(updater: RatesUpdater, interval_seconds: int = 300,
             result = updater.run_update()
             logger.info("Iteration %d: %d rates, %d errors",
                         iteration, result["total"], len(result["errors"]))
-        except Exception:  # noqa: BLE001 — scheduler не должен падать
+        except Exception:
             logger.exception("Scheduler iteration %d failed", iteration)
         iteration += 1
         if max_iterations is not None and iteration >= max_iterations:

@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 from datetime import timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 try:
     import tomllib  # Python 3.11+
@@ -26,9 +26,9 @@ def _find_project_root() -> Path:
 
 
 class SettingsLoader:
-    _instance: "SettingsLoader | None" = None
+    _instance: SettingsLoader | None = None
 
-    def __new__(cls, *args: Any, **kwargs: Any) -> "SettingsLoader":
+    def __new__(cls, *args: Any, **kwargs: Any) -> Self:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False  # type: ignore[attr-defined]

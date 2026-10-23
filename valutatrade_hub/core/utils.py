@@ -1,7 +1,7 @@
 """Утилиты: время, конвертация, кеш курсов, заглушка Parser Service."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from ..infra.database import DatabaseManager
 from ..infra.settings import SettingsLoader
@@ -24,11 +24,11 @@ _settings = SettingsLoader()
 # ---------------------- Время ----------------------
 
 def now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def parse_iso(ts: str) -> datetime:
-    return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    return datetime.fromisoformat(ts)    
 
 
 def is_fresh(updated_at: str, ttl: timedelta | None = None) -> bool:
@@ -36,8 +36,8 @@ def is_fresh(updated_at: str, ttl: timedelta | None = None) -> bool:
     try:
         dt = parse_iso(updated_at)
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return datetime.now(timezone.utc) - dt < ttl
+            dt = dt.replace(tzinfo=UTC)
+        return datetime.now(UTC) - dt < ttl
     except (TypeError, ValueError):
         return False
 
@@ -101,7 +101,7 @@ def get_rates_map() -> dict[str, float]:
 
 def validate_positive_amount(amount: float) -> float:
     if isinstance(amount, bool) or not isinstance(amount, (int, float)):
-        raise ValueError("'amount' должен быть числом")
+        raise TypeError("'amount' должен быть числом")
     if amount <= 0:
         raise ValueError("'amount' должен быть положительным числом")
     return float(amount)
@@ -109,11 +109,11 @@ def validate_positive_amount(amount: float) -> float:
 
 __all__ = [
     "DEFAULT_EXCHANGE_RATES",
-    "now_iso",
-    "parse_iso",
-    "is_fresh",
+    "CurrencyNotFoundError",
     "get_rate",
     "get_rates_map",
+    "is_fresh",
+    "now_iso",
+    "parse_iso",
     "validate_positive_amount",
-    "CurrencyNotFoundError",
 ]

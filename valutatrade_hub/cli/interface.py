@@ -1,14 +1,9 @@
 """CLI ValutaTrade Hub. Тонкий слой: парсинг + вызов usecases."""
 from __future__ import annotations
-from ..parser_service.api_clients import CoinGeckoClient, ExchangeRateApiClient
-from ..parser_service.config import ParserConfig
-from ..parser_service.storage import ParserStorage
-from ..parser_service.updater import RatesUpdater
-
 
 import argparse
 import shlex
-from typing import Callable, Optional
+from collections.abc import Callable
 
 from ..core import usecases
 from ..core.currencies import list_currencies
@@ -18,11 +13,15 @@ from ..core.exceptions import (
     InsufficientFundsError,
 )
 from ..core.models import User
+from ..parser_service.api_clients import CoinGeckoClient, ExchangeRateApiClient
+from ..parser_service.config import ParserConfig
+from ..parser_service.storage import ParserStorage
+from ..parser_service.updater import RatesUpdater
 
 
 class Session:
     def __init__(self) -> None:
-        self.user: Optional[User] = None
+        self.user: User | None = None
 
     def require_login(self) -> User:
         if self.user is None:
@@ -193,7 +192,7 @@ def dispatch_tokens(session: Session, tokens: list[str],
         print(f"{e}. Доступные коды: {', '.join(list_currencies())}")
     except ApiRequestError as e:
         print(f"{e}. Повторите попытку позже.")
-    except ValueError as e:
+    except (ValueError, TypeError) as e:
         print(str(e))
 
 
@@ -209,7 +208,7 @@ def dispatch_line(session: Session, line: str,
 
 # ---------------------- Точка входа ----------------------
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parsers = _build_parsers()
     session = Session()
 

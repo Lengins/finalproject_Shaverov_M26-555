@@ -1,13 +1,12 @@
 #Модели данных для платформы ValutaTrade Hub.
 
 from __future__ import annotations
-from .exceptions import InsufficientFundsError
 
 import hashlib
 import secrets
 from datetime import datetime
-from typing import Optional
 
+from .exceptions import InsufficientFundsError
 
 # Заглушка курсов (пока Parser Service не подключён).
 # Ключ — пара "FROM_TO", значение — сколько единиц TO даёт 1 единица FROM.
@@ -25,7 +24,7 @@ DEFAULT_EXCHANGE_RATES: dict[str, float] = {
 def _validate_positive_amount(amount: float, field_name: str = "amount") -> float:
     """Проверяет, что сумма — положительное число. Возвращает float."""
     if isinstance(amount, bool) or not isinstance(amount, (int, float)):
-        raise ValueError(f"'{field_name}' должен быть числом")
+        raise TypeError(f"'{field_name}' должен быть числом")
     if amount <= 0:
         raise ValueError(f"'{field_name}' должен быть положительным числом")
     return float(amount)
@@ -60,7 +59,7 @@ class User:
 
     # --- Фабричный метод для регистрации (генерирует соль и хеш) ---
     @classmethod
-    def create(cls, user_id: int, username: str, password: str) -> "User":
+    def create(cls, user_id: int, username: str, password: str) -> User:
         cls._validate_username(username)
         cls._validate_password(password)
         salt = secrets.token_hex(8)
@@ -142,7 +141,7 @@ class User:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "User":
+    def from_dict(cls, data: dict) -> User:
         return cls(
             user_id=data["user_id"],
             username=data["username"],
@@ -173,7 +172,7 @@ class Wallet:
     @balance.setter
     def balance(self, value: float) -> None:
         if isinstance(value, bool) or not isinstance(value, (int, float)):
-            raise ValueError("Баланс должен быть числом")
+            raise TypeError("Баланс должен быть числом")
         if value < 0:
             raise ValueError("Баланс не может быть отрицательным")
         self._balance = float(value)
@@ -183,15 +182,6 @@ class Wallet:
         amount = _validate_positive_amount(amount)
         self._balance += amount
 
-    def withdraw(self, amount: float) -> None:
-        """Снимает средства, если баланса достаточно."""
-        amount = _validate_positive_amount(amount)
-        if amount > self._balance:
-            raise ValueError(
-                f"Недостаточно средств: доступно {self._balance:.4f} "
-                f"{self.currency_code}, требуется {amount:.4f} {self.currency_code}"
-            )
-        self._balance -= amount
 
     def get_balance_info(self) -> dict[str, object]:
         return {"currency_code": self.currency_code, "balance": self._balance}
@@ -201,13 +191,14 @@ class Wallet:
         return {"currency_code": self.currency_code, "balance": self._balance}
 
     @classmethod
-    def from_dict(cls, data: dict) -> "Wallet":
+    def from_dict(cls, data: dict) -> Wallet:
         return cls(currency_code=data["currency_code"], balance=data["balance"])
 
     def __repr__(self) -> str:
         return f"Wallet({self.currency_code!r}, balance={self._balance})"
 
     def withdraw(self, amount: float) -> None:
+        """Снимает средства, если баланса достаточно."""
         amount = _validate_positive_amount(amount)
         if amount > self._balance:
             raise InsufficientFundsError(self._balance, amount, self.currency_code)
@@ -222,8 +213,8 @@ class Portfolio:
     def __init__(
         self,
         user_id: int,
-        user: Optional[User] = None,
-        wallets: Optional[dict[str, Wallet]] = None,
+        user: User | None = None,
+        wallets: dict[str, Wallet] | None = None,
     ) -> None:
         self._user_id = user_id
         self._user = user
@@ -231,7 +222,7 @@ class Portfolio:
 
     # --- Свойства ---
     @property
-    def user(self) -> Optional[User]:
+    def user(self) -> User | None:
         """Пользователь-владелец (только геттер, без перезаписи)."""
         return self._user
 
@@ -254,7 +245,7 @@ class Portfolio:
         self._wallets[code] = wallet
         return wallet
 
-    def get_wallet(self, currency_code: str) -> Optional[Wallet]:
+    def get_wallet(self, currency_code: str) -> Wallet | None:
         """Возвращает кошелёк по коду или None."""
         code = _validate_currency_code(currency_code)
         return self._wallets.get(code)
@@ -263,7 +254,7 @@ class Portfolio:
     def get_total_value(
         self,
         base_currency: str = "USD",
-        rates: Optional[dict[str, float]] = None,
+        rates: dict[str, float] | None = None,
     ) -> float:
         """Общая стоимость всех кошельков в базовой валюте."""
         base = _validate_currency_code(base_currency)
@@ -298,7 +289,7 @@ class Portfolio:
         }
 
     @classmethod
-    def from_dict(cls, data: dict, user: Optional[User] = None) -> "Portfolio":
+    def from_dict(cls, data: dict, user: User | None = None) -> Portfolio:
         wallets = {
             code: Wallet(currency_code=code, balance=info["balance"])
             for code, info in data.get("wallets", {}).items()
