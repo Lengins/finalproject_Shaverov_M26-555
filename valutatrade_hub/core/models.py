@@ -1,6 +1,7 @@
 #Модели данных для платформы ValutaTrade Hub.
 
 from __future__ import annotations
+from .exceptions import InsufficientFundsError
 
 import hashlib
 import secrets
@@ -206,6 +207,11 @@ class Wallet:
     def __repr__(self) -> str:
         return f"Wallet({self.currency_code!r}, balance={self._balance})"
 
+    def withdraw(self, amount: float) -> None:
+        amount = _validate_positive_amount(amount)
+        if amount > self._balance:
+            raise InsufficientFundsError(self._balance, amount, self.currency_code)
+        self._balance -= amount
 
 # ---------------------------------------------------------------------------
 # Portfolio

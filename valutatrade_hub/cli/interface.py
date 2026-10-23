@@ -1,4 +1,4 @@
-#CLI ValutaTrade Hub. Тонкий слой: парсинг + вызов usecases.
+"""CLI ValutaTrade Hub. Тонкий слой: парсинг + вызов usecases."""
 from __future__ import annotations
 
 import argparse
@@ -6,6 +6,12 @@ import shlex
 from typing import Callable, Optional
 
 from ..core import usecases
+from ..core.currencies import list_currencies
+from ..core.exceptions import (
+    ApiRequestError,
+    CurrencyNotFoundError,
+    InsufficientFundsError,
+)
 from ..core.models import User
 
 
@@ -23,7 +29,7 @@ def _fmt(x: float, d: int = 2) -> str:
     return f"{x:,.{d}f}"
 
 
-# ---------------------- Обработчики команд ----------------------
+# ---------------------- Обработчики ----------------------
 
 def cmd_register(session: Session, args: argparse.Namespace) -> None:
     user = usecases.register_user(args.username, args.password)
@@ -44,10 +50,10 @@ def cmd_show_portfolio(session: Session, args: argparse.Namespace) -> None:
         print("  (кошельков нет)")
         return
     for row in data["wallets"]:
-        bal = f"{row['balance']:.4f}" if row["currency"] in ("BTC", "ETH") \
-            else f"{row['balance']:.2f}"
-        val = "нет курса" if row["value"] is None \
-            else f"{_fmt(row['value'])} {data['base']}"
+        bal = (f"{row['balance']:.4f}"
+               if row["currency"] in ("BTC", "ETH") else f"{row['balance']:.2f}")
+        val = ("нет курса" if row["value"] is None
+               else f"{_fmt(row['value'])} {data['base']}")
         print(f"- {row['currency']}: {bal}  → {val}")
     print("-" * 33)
     print(f"ИТОГО: {_fmt(data['total'])} {data['base']}")
@@ -55,7 +61,7 @@ def cmd_show_portfolio(session: Session, args: argparse.Namespace) -> None:
 
 def cmd_buy(session: Session, args: argparse.Namespace) -> None:
     user = session.require_login()
-    res = usecases.buy_currency(user, args.currency, args.amount)
+    res = usecases.buy(user, args.currency, args.amount)
     rate_str = (f"{_fmt(res['rate'])} USD/{res['currency']}"
                 if res["rate"] is not None else "нет курса")
     print(f"Покупка выполнена: {res['amount']:.4f} {res['currency']} "
@@ -68,7 +74,7 @@ def cmd_buy(session: Session, args: argparse.Namespace) -> None:
 
 def cmd_sell(session: Session, args: argparse.Namespace) -> None:
     user = session.require_login()
-    res = usecases.sell_currency(user, args.currency, args.amount)
+    res = usecases.sell(user, args.currency, args.amount)
     rate_str = (f"{_fmt(res['rate'])} USD/{res['currency']}"
                 if res["rate"] is not None else "нет курса")
     print(f"Продажа выполнена: {res['amount']:.4f} {res['currency']} "
@@ -96,14 +102,15 @@ def cmd_help(session: Session, args: argparse.Namespace) -> None:
     print("  buy --currency <str> --amount <float>")
     print("  sell --currency <str> --amount <float>")
     print("  get-rate --from <str> --to <str>")
-    print("  exit — выход")
+    print("  exit")
+    print(f"Поддерживаемые валюты: {', '.join(list_currencies())}")
 
 
 def cmd_exit(session: Session, args: argparse.Namespace) -> None:
     raise SystemExit(0)
 
 
-# ---------------------- Сборка парсеров ----------------------
+# ---------------------- Парсеры ----------------------
 
 Command = Callable[[Session, argparse.Namespace], None]
 
@@ -125,7 +132,7 @@ def _build_parsers() -> dict[str, tuple[argparse.ArgumentParser, Command]]:
     p.add_argument("--password", required=True)
 
     p = add("show-portfolio", cmd_show_portfolio)
-    p.add_argument("--base", default="USD")
+    p.add_argument("--base", default=None)
 
     p = add("buy", cmd_buy)
     p.add_argument("--currency", required=True)
@@ -146,11 +153,8 @@ def _build_parsers() -> dict[str, tuple[argparse.ArgumentParser, Command]]:
 
 # ---------------------- Диспетчеризация ----------------------
 
-def dispatch_tokens(
-    session: Session,
-    tokens: list[str],
-    parsers: dict[str, tuple[argparse.ArgumentParser, Command]],
-) -> None:
+def dispatch_tokens(session: Session, tokens: list[str],
+                    parsers: dict[str, tuple[argparse.ArgumentParser, Command]]) -> None:
     if not tokens:
         return
     name, rest = tokens[0], tokens[1:]
@@ -162,12 +166,18 @@ def dispatch_tokens(
     try:
         args = parser.parse_args(rest)
     except SystemExit:
-        return  # argparse уже вывел сообщение
+        return
 
     try:
         func(session, args)
     except RuntimeError as e:
         print(str(e))
+    except InsufficientFundsError as e:
+        print(str(e))
+    except CurrencyNotFoundError as e:
+        print(f"{e}. Доступные коды: {', '.join(list_currencies())}")
+    except ApiRequestError as e:
+        print(f"{e}. Повторите попытку позже.")
     except ValueError as e:
         print(str(e))
 

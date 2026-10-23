@@ -1,0 +1,40 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+
+# --- Виртуальное окружение ---
+.venv/
+venv/
+
+# --- uv ---
+# uv.lock — КОММИТИМ (фиксирует зависимости), не игнорируем
+# .python-version — тоже коммитим
+
+# --- Сборка ---
+dist/
+build/
+
+# --- Тесты / кеши ---
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# --- Проектные данные и логи (создаются в рантайме) ---
+data/*.json
+data/*.tmp
+logs/
+
+# --- IDE / OS ---
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# --- Локальные секреты (если появятся) ---
+.env
+.env.*

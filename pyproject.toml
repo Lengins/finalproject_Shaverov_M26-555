@@ -33,4 +33,16 @@ src = ["src"]
 
 [tool.uv.build-backend]
 module-name = "valutatrade_hub"
-module-root = ""          
+module-root = "" 
+
+[tool.valutatrade]
+data_dir = "data"
+rates_ttl_seconds = 300
+base_currency = "USD"
+log_dir = "logs"
+log_file = "actions.log"
+log_level = "INFO"
+log_format = "text"            # "text" | "json"
+log_max_bytes = 1048576
+log_backup_count = 3
+        
