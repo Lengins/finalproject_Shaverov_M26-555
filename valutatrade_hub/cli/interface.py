@@ -1,5 +1,10 @@
 """CLI ValutaTrade Hub. Тонкий слой: парсинг + вызов usecases."""
 from __future__ import annotations
+from ..parser_service.api_clients import CoinGeckoClient, ExchangeRateApiClient
+from ..parser_service.config import ParserConfig
+from ..parser_service.storage import ParserStorage
+from ..parser_service.updater import RatesUpdater
+
 
 import argparse
 import shlex
@@ -102,6 +107,8 @@ def cmd_help(session: Session, args: argparse.Namespace) -> None:
     print("  buy --currency <str> --amount <float>")
     print("  sell --currency <str> --amount <float>")
     print("  get-rate --from <str> --to <str>")
+    print("  update-rates [--source coingecko|exchangerate]")
+    print("  show-rates [--currency <str>] [--top <int>] [--base <str>]")
     print("  exit")
     print(f"Поддерживаемые валюты: {', '.join(list_currencies())}")
 
@@ -145,6 +152,14 @@ def _build_parsers() -> dict[str, tuple[argparse.ArgumentParser, Command]]:
     p = add("get-rate", cmd_get_rate)
     p.add_argument("--from", dest="from_code", required=True)
     p.add_argument("--to", dest="to_code", required=True)
+
+    p = add("update-rates", cmd_update_rates)
+    p.add_argument("--source", choices=["coingecko", "exchangerate"], default=None)
+
+    p = add("show-rates", cmd_show_rates)
+    p.add_argument("--currency", default=None)
+    p.add_argument("--top", type=int, default=None)
+    p.add_argument("--base", default=None)
 
     add("help", cmd_help)
     add("exit", cmd_exit)
@@ -213,3 +228,99 @@ def main(argv: Optional[list[str]] = None) -> int:
             dispatch_line(session, line, parsers)
         except SystemExit:
             return 0
+
+def _parser_components():
+    cfg = ParserConfig()
+    clients = [CoinGeckoClient(cfg), ExchangeRateApiClient(cfg)]
+    storage = ParserStorage(cfg.rates_path, cfg.history_path)
+    return RatesUpdater(clients, storage), storage, cfg
+
+
+# ---------------------- update-rates ----------------------
+
+def cmd_update_rates(session: Session, args: argparse.Namespace) -> None:
+    updater, _, _ = _parser_components()
+    result = updater.run_update(source_filter=args.source)
+    if result["errors"]:
+        for err in result["errors"]:
+            print(f"ERROR: {err}")
+        print(f"Update completed with errors. Total rates updated: {result['total']}. "
+              f"Check logs/ for details.")
+    else:
+        print(f"Update successful. Total rates updated: {result['total']}. "
+              f"Last refresh: {result['last_refresh']}")
+
+
+# ---------------------- show-rates ----------------------
+
+def _convert_to_base(items: list[tuple[str, dict]], base: str) -> list[tuple[str, dict]]:
+    """Пересчитать все пары в FROM_BASE через USD-пивот."""
+    lookup: dict[str, dict] = dict(items)
+
+    def usd_rate(code: str) -> float | None:
+        if code == "USD":
+            return 1.0
+        if f"{code}_USD" in lookup:
+            return float(lookup[f"{code}_USD"]["rate"])
+        if f"USD_{code}" in lookup:
+            inv = float(lookup[f"USD_{code}"]["rate"])
+            return 1.0 / inv if inv else None
+        return None
+
+    base_usd = usd_rate(base)
+    if base_usd is None:
+        return items
+
+    codes: set[str] = set()
+    for key in lookup:
+        f, t = key.split("_", 1)
+        codes.update((f, t))
+    codes.discard(base)
+
+    result: list[tuple[str, dict]] = []
+    for code in codes:
+        code_usd = usd_rate(code)
+        if code_usd is None:
+            continue
+        source_entry = lookup.get(f"{code}_USD") or lookup.get(f"USD_{code}")
+        if source_entry is None:
+            continue
+        result.append((f"{code}_{base}", {
+            "rate": code_usd / base_usd,
+            "updated_at": source_entry.get("updated_at"),
+            "source": source_entry.get("source"),
+        }))
+    return result
+
+
+def cmd_show_rates(session: Session, args: argparse.Namespace) -> None:
+    _, storage, cfg = _parser_components()
+    snapshot = storage.load_snapshot()
+    pairs = snapshot.get("pairs", {})
+
+    if not pairs:
+        print("Локальный кеш курсов пуст. Выполните 'update-rates', чтобы загрузить данные.")
+        return
+
+    items: list[tuple[str, dict]] = list(pairs.items())
+
+    if args.currency:
+        code = args.currency.upper()
+        items = [(k, v) for k, v in items if code in k.split("_")]
+        if not items:
+            print(f"Курс для '{code}' не найден в кеше.")
+            return
+
+    if args.base:
+        items = _convert_to_base(items, args.base.upper())
+
+    if args.top:
+        crypto = set(cfg.CRYPTO_CURRENCIES)
+        items = [(k, v) for k, v in items if k.split("_", 1)[0] in crypto]
+        items = sorted(items, key=lambda x: float(x[1]["rate"]), reverse=True)[:args.top]
+    else:
+        items = sorted(items, key=lambda x: x[0])
+
+    print(f"Rates from cache (updated at {snapshot.get('last_refresh')}):")
+    for key, info in items:
+        print(f"- {key}: {info['rate']}")

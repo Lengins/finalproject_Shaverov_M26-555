@@ -38,3 +38,8 @@ Thumbs.db
 # --- Локальные секреты (если появятся) ---
 .env
 .env.*
+
+# Parser Service
+.env
+data/exchange_rates.json
+logs/parser.log
